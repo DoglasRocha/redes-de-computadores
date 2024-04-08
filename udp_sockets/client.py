@@ -22,14 +22,14 @@ else:
 
         n_packets = response[1]
         buffer_size = response[2]
+        buffer = [None for i in range(int(n_packets))]
         lost = []
 
         brute_response = clientSocket.recvfrom(int(buffer_size))
-        buffer = []
         # ...
         for i in range(0, int(n_packets)):
             message, addr = brute_response
-            buffer.append(message)
+            buffer[i] = message
 
             if message.decode().split()[0] == "END":
                 break
@@ -38,21 +38,23 @@ else:
 
     file = open(filename, "wb")
     n_digits = len(str(n_packets))
-    for message in buffer:
-        header = message[0 : n_digits + 1]
-        data = message[n_digits + 2 :]
+    for i in range(len(buffer)):
+        if buffer[i] is not None:
+            header = buffer[i][0 : n_digits + 1]
+            data = buffer[i][n_digits + 2 :]
+            file.write(data[1:-1])
+            print(data)
 
-        if i != int(header.decode()):
+        else:
             print(i)
             lost.append(i)
 
-        print(data)
         # text = " ".join(response[1:])
 
         # print(f"{text=}")
         # clean_text = text.replace("b'", "").replace("'", "").replace('b"', "")
         # print(f"{clean_text=}")
-        file.write(data[1:-1])
+
         # file.write(bytes(clean_text, encoding="utf-8"))
 
     print(lost)
