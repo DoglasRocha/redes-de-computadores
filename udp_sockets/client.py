@@ -1,4 +1,5 @@
 from socket import socket, AF_INET, SOCK_DGRAM
+from os import linesep
 
 SERVERNAME = "127.0.0.1"
 PORT = 8065
@@ -11,13 +12,14 @@ clientSocket.sendto(f"GET {filename}".encode(), ADDR)
 
 brute_response = clientSocket.recvfrom(1024)
 message, addr = brute_response
-response = message.decode().split(" ")
+response = message.decode().split("-|-")
 
-
+n_packets = None
 if response[0] == "ERROR":
     print("Aconteceu um erro: ", response[1])
 
 else:
+    response = message.decode().split(" ")
     if response[0] == "OK":
 
         n_packets = response[1]
@@ -36,27 +38,29 @@ else:
 
             brute_response = clientSocket.recvfrom(int(buffer_size))
 
-    file = open(filename, "wb")
-    n_digits = len(str(n_packets))
-    for i in range(len(buffer)):
-        if buffer[i] is not None:
-            header = buffer[i][0 : n_digits + 1]
-            data = buffer[i][n_digits + 2 :]
-            file.write(data[1:-1])
-            print(data)
+    if n_packets is not None:
+        file = open(filename, "wb")
+        n_digits = len(str(n_packets))
+        for i in range(len(buffer)):
+            if buffer[i] is not None:
+                header = buffer[i][0 : n_digits + 1]
+                data = buffer[i][n_digits + 2 :]
+                text = data[1:-1].replace("\n".encode(), linesep.encode())
+                file.write(text)
+                print(data)
 
-        else:
-            print(i)
-            lost.append(i)
+            else:
+                print(i)
+                lost.append(i)
 
-        # text = " ".join(response[1:])
+            # text = " ".join(response[1:])
 
-        # print(f"{text=}")
-        # clean_text = text.replace("b'", "").replace("'", "").replace('b"', "")
-        # print(f"{clean_text=}")
+            # print(f"{text=}")
+            # clean_text = text.replace("b'", "").replace("'", "").replace('b"', "")
+            # print(f"{clean_text=}")
 
-        # file.write(bytes(clean_text, encoding="utf-8"))
+            # file.write(bytes(clean_text, encoding="utf-8"))
 
-    print(lost)
-    file.close()
+        print(lost)
+        file.close()
 clientSocket.close()
