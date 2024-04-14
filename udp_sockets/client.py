@@ -60,11 +60,13 @@ else:
             if segment is not None:
                 file.write(segment)
             else:
+                data = b"dkjasbda"
+                hash_ = b"dasjbadskd"
                 while md5(data).digest() != hash_:
                     clientSocket.sendto(f"GET {filename}/{index}".encode(), ADDR)
                     message, addr = clientSocket.recvfrom(int(buffer_size))
-                    hash_ = packet[hash_init:hash_end]
-                    data = message[n_digits + 1 :]
+                    hash_ = message[hash_init:hash_end]
+                    data = message[hash_end + 1 :]
                 file.write(data)
         file.close()
         print("Arquivo transferido com sucesso!")
