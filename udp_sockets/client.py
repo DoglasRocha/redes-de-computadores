@@ -1,4 +1,5 @@
 from socket import socket, AF_INET, SOCK_DGRAM
+from hashlib import md5
 
 SERVERNAME = "127.0.0.1"
 PORT = 8065
@@ -19,6 +20,7 @@ if message[0:5] == b"ERROR":
     print("Aconteceu um erro: ", " ".join(response[1:]))
 
 else:
+    print(message)
     if message[0:2] == b"OK":
 
         response = message.decode().split(" ")
@@ -32,6 +34,7 @@ else:
         for i in range(0, int(n_packets)):
             message, addr = brute_response
             if message[0:3] == b"END":
+                print("END")
                 break
 
             if i != int(packet_to_drop):
@@ -43,10 +46,15 @@ else:
         file_array = [None for i in range(int(n_packets))]
 
         n_digits = len(str(n_packets))
+        hash_init = n_digits + 1
+        hash_end = hash_init + 16
         for packet in buffer:
             header = packet[0:n_digits]
-            data = packet[n_digits + 1 :]
-            file_array[int(header)] = data
+            hash_ = packet[hash_init:hash_end]
+            data = packet[hash_end + 1 :]
+
+            if md5(data).digest() == hash_:
+                file_array[int(header)] = data
 
         file = open(filename, "wb")
         for index, segment in enumerate(file_array):
@@ -58,4 +66,6 @@ else:
                 data = message[n_digits + 1 :]
                 file.write(data)
         file.close()
+        print("Arquivo transferido com sucesso!")
+
 clientSocket.close()
