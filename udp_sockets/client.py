@@ -20,7 +20,6 @@ if message[0:5] == b"ERROR":
     print("Aconteceu um erro: ", " ".join(response[1:]))
 
 else:
-    print(message)
     if message[0:2] == b"OK":
 
         response = message.decode().split(" ")
@@ -61,9 +60,11 @@ else:
             if segment is not None:
                 file.write(segment)
             else:
-                clientSocket.sendto(f"GET {filename}/{index}".encode(), ADDR)
-                message, addr = clientSocket.recvfrom(int(buffer_size))
-                data = message[n_digits + 1 :]
+                while md5(data).digest() != hash_:
+                    clientSocket.sendto(f"GET {filename}/{index}".encode(), ADDR)
+                    message, addr = clientSocket.recvfrom(int(buffer_size))
+                    hash_ = packet[hash_init:hash_end]
+                    data = message[n_digits + 1 :]
                 file.write(data)
         file.close()
         print("Arquivo transferido com sucesso!")
