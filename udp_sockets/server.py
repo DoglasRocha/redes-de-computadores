@@ -10,6 +10,27 @@ def send_file_part(returnSocket: socket, filename: str, part: str) -> None:
         returnSocket.sendto("ERROR Arquivo não encontrado".encode(), addr)
         return
 
+    n_packets = 0
+    with open(os.path.join("./files", filename), "rb") as file:
+        data = file.read(1024)
+        while data:
+            n_packets += 1
+            data = file.read(1024)
+
+    n_digits = len(str(n_packets))
+    if int(part) > n_packets - 1:
+        returnSocket.sendto("ERROR Pacote não existe".encode(), addr)
+
+    with open(os.path.join("./files", filename), "rb") as file:
+        i = 0
+        while data := file.read(1024):
+            if int(part) == i:
+                returnSocket.sendto(
+                    b" ".join([f"{i:{'0'}{n_digits}}".encode(), data]), addr
+                )
+                break
+            i += 1
+
 
 def send_full_file(returnSocket: socket, filename: str) -> None:
     if not os.path.exists(os.path.join("./files", filename)):
@@ -18,10 +39,8 @@ def send_full_file(returnSocket: socket, filename: str) -> None:
 
     n_packets = 0
     with open(os.path.join("./files", filename), "rb") as file:
-        data = file.read(1024)
-        while data:
+        while data := file.read(1024):
             n_packets += 1
-            data = file.read(1024)
 
     n_digits = len(str(n_packets))
 
@@ -33,6 +52,9 @@ def send_full_file(returnSocket: socket, filename: str) -> None:
                 b" ".join([f"{i:{'0'}{n_digits}}".encode(), data]), addr
             )
             i += 1
+
+    sleep(1)
+    returnSocket.sendto(b"END", addr)
 
 
 def handle_request(message: bytes, addr: str) -> None:
@@ -55,9 +77,6 @@ def handle_request(message: bytes, addr: str) -> None:
         send_file_part(returnSocket, splitted_filename[0], splitted_filename[1])
     else:
         send_full_file(returnSocket, filename)
-
-    sleep(1)
-    returnSocket.sendto(b"END", addr)
 
 
 NAME = ""

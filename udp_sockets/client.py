@@ -7,6 +7,7 @@ ADDR = (SERVERNAME, PORT)
 clientSocket = socket(AF_INET, SOCK_DGRAM)
 
 filename = input("Qual o nome do arquivo que você deseja receber? ")
+packet_to_drop = input("Qual pacote deseja jogar fora? (-1 para não jogar) ")
 clientSocket.sendto(f"GET {filename}".encode(), ADDR)
 
 brute_response = clientSocket.recvfrom(1024)
@@ -27,12 +28,15 @@ else:
         lost = []
 
         brute_response = clientSocket.recvfrom(int(buffer_size))
+
         for i in range(0, int(n_packets)):
             message, addr = brute_response
             if message[0:3] == b"END":
                 break
 
-            buffer.append(message)
+            if i != int(packet_to_drop):
+                buffer.append(message)
+
             brute_response = clientSocket.recvfrom(int(buffer_size))
 
     if n_packets is not None:
@@ -45,8 +49,13 @@ else:
             file_array[int(header)] = data
 
         file = open(filename, "wb")
-        for segment in file_array:
+        for index, segment in enumerate(file_array):
             if segment is not None:
                 file.write(segment)
+            else:
+                clientSocket.sendto(f"GET {filename}/{index}".encode(), ADDR)
+                message, addr = clientSocket.recvfrom(int(buffer_size))
+                data = message[n_digits + 1 :]
+                file.write(data)
         file.close()
 clientSocket.close()
