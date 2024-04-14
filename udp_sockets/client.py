@@ -1,5 +1,4 @@
 from socket import socket, AF_INET, SOCK_DGRAM
-from os import linesep
 
 SERVERNAME = "127.0.0.1"
 PORT = 8065
@@ -12,55 +11,42 @@ clientSocket.sendto(f"GET {filename}".encode(), ADDR)
 
 brute_response = clientSocket.recvfrom(1024)
 message, addr = brute_response
-response = message.decode().split("-|-")
 
 n_packets = None
-if response[0] == "ERROR":
-    print("Aconteceu um erro: ", response[1])
+if message[0:5] == b"ERROR":
+    response = message.decode().split(" ")
+    print("Aconteceu um erro: ", " ".join(response[1:]))
 
 else:
-    response = message.decode().split(" ")
-    if response[0] == "OK":
+    if message[0:2] == b"OK":
 
+        response = message.decode().split(" ")
         n_packets = response[1]
         buffer_size = response[2]
-        buffer = [None for i in range(int(n_packets))]
+        buffer = []
         lost = []
 
         brute_response = clientSocket.recvfrom(int(buffer_size))
-        # ...
         for i in range(0, int(n_packets)):
             message, addr = brute_response
-            buffer[i] = message
-
-            if message.decode().split()[0] == "END":
+            if message[0:3] == b"END":
                 break
 
+            buffer.append(message)
             brute_response = clientSocket.recvfrom(int(buffer_size))
 
     if n_packets is not None:
-        file = open(filename, "wb")
+        file_array = [None for i in range(int(n_packets))]
+
         n_digits = len(str(n_packets))
-        for i in range(len(buffer)):
-            if buffer[i] is not None:
-                header = buffer[i][0 : n_digits + 1]
-                data = buffer[i][n_digits + 2 :]
-                text = data[1:-1].replace("\n".encode(), linesep.encode())
-                file.write(text)
-                print(data)
+        for packet in buffer:
+            header = packet[0:n_digits]
+            data = packet[n_digits + 1 :]
+            file_array[int(header)] = data
 
-            else:
-                print(i)
-                lost.append(i)
-
-            # text = " ".join(response[1:])
-
-            # print(f"{text=}")
-            # clean_text = text.replace("b'", "").replace("'", "").replace('b"', "")
-            # print(f"{clean_text=}")
-
-            # file.write(bytes(clean_text, encoding="utf-8"))
-
-        print(lost)
+        file = open(filename, "wb")
+        for segment in file_array:
+            if segment is not None:
+                file.write(segment)
         file.close()
 clientSocket.close()
