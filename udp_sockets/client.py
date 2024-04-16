@@ -35,7 +35,6 @@ try:
             for i in range(0, int(n_packets)):
                 message, addr = brute_response
                 if message[0:3] == b"END":
-                    print("END")
                     break
 
                 if i != int(packet_to_drop):
