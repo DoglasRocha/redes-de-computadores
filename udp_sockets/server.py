@@ -105,6 +105,7 @@ def handle_request(message_: bytes, addr_: str) -> None:
         send_full_file(returnSocket, filename, addr_)
 
     PORTS_IN_USE.remove(random_port)
+    returnSocket.close()
 
 
 while True:
