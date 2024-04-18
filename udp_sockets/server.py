@@ -4,6 +4,7 @@ from time import sleep
 from threading import Thread
 from hashlib import md5
 from typing import Any
+from math import ceil
 import logging
 import os
 
@@ -33,7 +34,7 @@ def send_file_part(
         returnSocket.sendto("ERROR Arquivo não encontrado".encode(), address)
         return
 
-    n_packets = (os.path.getsize(os.path.join("./files", filename)) // 1024) + 1
+    n_packets = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
 
     n_digits = len(str(n_packets))
     if int(part) > n_packets - 1:
@@ -56,7 +57,7 @@ def send_full_file(returnSocket: socket, filename: str, address: Any) -> None:
         returnSocket.sendto("ERROR Arquivo não encontrado".encode(), address)
         return
 
-    n_packets = (os.path.getsize(os.path.join("./files", filename)) // 1024) + 1
+    n_packets = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
 
     n_digits = len(str(n_packets))
 
