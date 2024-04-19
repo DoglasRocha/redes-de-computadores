@@ -17,16 +17,6 @@ logging.basicConfig(
     format="%(levelname)s - %(asctime)s: %(message)s",
 )
 
-NAME = "127.0.0.1"
-PORT = 8065
-
-serverSocket = socket(AF_INET, SOCK_STREAM)
-serverSocket.bind((NAME, PORT))
-
-serverSocket.listen()
-logger.info(f"Socket escutando em {NAME}:{PORT}")
-print(f"Socket escutando em {NAME}:{PORT}")
-
 
 def send_file_part(returnSocket: socket, filename: str, part: str) -> None:
     if not os.path.exists(os.path.join("./files", filename)):
@@ -72,33 +62,69 @@ def send_full_file(returnSocket: socket, filename: str) -> None:
     returnSocket.send(b"END")
 
 
-def handle_request(clientSocket: socket, addr_: str) -> None:
-    message = clientSocket.recv(1024)
-
-    request = message.decode()
-    logger.info(f"Requisição: '{request}'")
-
-    request = request.split()
-    if len(request) <= 1:
-        clientSocket.send("ERROR Má requisição".encode())
-        return
-
-    if request[0] != "GET":
-        clientSocket.send("ERROR Método não permitido".encode())
-        return
-
-    filename = request[1]
-    splitted_filename = filename.split("/")
-    if len(splitted_filename) > 1:
-        send_file_part(clientSocket, splitted_filename[0], splitted_filename[1])
-    else:
-        send_full_file(clientSocket, filename)
-
+def close_connection(clientSocket: socket, addr_: str) -> bool:
+    logger.info(f"Fechando conexão com {addr_}")
+    clientSocket.send(b"FECHADO")
     clientSocket.close()
 
+    return True
 
-while True:
-    clientSocket, addr = serverSocket.accept()
 
-    thread = Thread(target=handle_request, args=(clientSocket, addr), daemon=True)
-    thread.start()
+def handle_request(clientSocket: socket, addr_: str) -> None:
+    logger.info(f"Aceitando conexão com endereço: {addr_}")
+    while True:
+        message = clientSocket.recv(1024)
+        request = message.decode().split()
+
+        if len(request) <= 0:
+            logger.warning(f"Má requsição de {addr_}")
+            clientSocket.send("ERROR Má requisição".encode())
+            clientSocket.send(b"FECHADO")
+            clientSocket.close()
+            return
+
+        operation: str = request[0]
+        operation_opts: dict = {
+            "SAIR": close_connection,
+            "ARQUIVO": lambda x: x,
+            "CHAT": lambda x: x,
+        }
+        if operation not in operation_opts.keys():
+            clientSocket.send("ERROR Método não permitido".encode())
+            clientSocket.send(b"FECHADO")
+            clientSocket.close()
+            return
+
+        if operation_opts[operation](clientSocket, addr_):
+            return
+
+    # filename = request[1]
+    # splitted_filename = filename.split("/")
+    # if len(splitted_filename) > 1:
+    #     send_file_part(clientSocket, splitted_filename[0], splitted_filename[1])
+    # else:
+    #     send_full_file(clientSocket, filename)
+
+    # clientSocket.close()
+
+
+def run_server() -> None:
+    NAME = "127.0.0.1"
+    PORT = 8065
+
+    serverSocket = socket(AF_INET, SOCK_STREAM)
+    serverSocket.bind((NAME, PORT))
+
+    serverSocket.listen()
+    logger.info(f"Socket escutando em {NAME}:{PORT}")
+    print(f"Socket escutando em {NAME}:{PORT}")
+
+    while True:
+        clientSocket, addr = serverSocket.accept()
+
+        thread = Thread(target=handle_request, args=(clientSocket, addr), daemon=True)
+        thread.start()
+
+
+if __name__ == "__main__":
+    run_server()
