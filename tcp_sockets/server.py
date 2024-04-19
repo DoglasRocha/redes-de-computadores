@@ -1,4 +1,4 @@
-from socket import socket, AF_INET, SOCK_DGRAM
+from socket import socket, AF_INET, SOCK_STREAM
 from random import randint
 from time import sleep
 from threading import Thread
@@ -17,100 +17,88 @@ logging.basicConfig(
     format="%(levelname)s - %(asctime)s: %(message)s",
 )
 
-NAME = ""
+NAME = "127.0.0.1"
 PORT = 8065
 
-serverSocket = socket(AF_INET, SOCK_DGRAM)
+serverSocket = socket(AF_INET, SOCK_STREAM)
 serverSocket.bind((NAME, PORT))
-PORTS_IN_USE = [
-    8065,
-]
+
+serverSocket.listen()
+logger.info(f"Socket escutando em {NAME}:{PORT}")
+print(f"Socket escutando em {NAME}:{PORT}")
 
 
-def send_file_part(
-    returnSocket: socket, filename: str, part: str, address: Any
-) -> None:
+def send_file_part(returnSocket: socket, filename: str, part: str) -> None:
     if not os.path.exists(os.path.join("./files", filename)):
-        returnSocket.sendto("ERROR Arquivo não encontrado".encode(), address)
+        returnSocket.send("ERROR Arquivo não encontrado".encode())
         return
 
     n_packets = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
 
     n_digits = len(str(n_packets))
     if int(part) > n_packets - 1:
-        returnSocket.sendto("ERROR Pacote não existe".encode(), address)
+        returnSocket.send("ERROR Pacote não existe".encode())
 
     with open(os.path.join("./files", filename), "rb") as file:
         i = 0
         while data := file.read(1024):
             if int(part) == i:
                 hash_ = md5(data).digest()
-                returnSocket.sendto(
-                    b" ".join([f"{i:{'0'}{n_digits}}".encode(), hash_, data]), address
+                returnSocket.send(
+                    b" ".join([f"{i:{'0'}{n_digits}}".encode(), hash_, data])
                 )
                 break
             i += 1
 
 
-def send_full_file(returnSocket: socket, filename: str, address: Any) -> None:
+def send_full_file(returnSocket: socket, filename: str) -> None:
     if not os.path.exists(os.path.join("./files", filename)):
-        returnSocket.sendto("ERROR Arquivo não encontrado".encode(), address)
+        returnSocket.send("ERROR Arquivo não encontrado".encode())
         return
 
     n_packets = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
 
     n_digits = len(str(n_packets))
 
-    returnSocket.sendto(f"OK {n_packets} {n_digits+1+16+1+1024}".encode(), address)
+    returnSocket.send(f"OK {n_packets} {n_digits+1+16+1+1024}".encode())
     with open(os.path.join("./files", filename), "rb") as file:
         i = 0
         while data := file.read(1024):
             hash_ = md5(data).digest()
-            returnSocket.sendto(
-                b" ".join([f"{i:{'0'}{n_digits}}".encode(), hash_, data]), address
-            )
+            returnSocket.send(b" ".join([f"{i:{'0'}{n_digits}}".encode(), hash_, data]))
             i += 1
 
     sleep(1)
-    returnSocket.sendto(b"END", address)
+    returnSocket.send(b"END")
 
 
-def handle_request(message_: bytes, addr_: str) -> None:
-    request = message_.decode().split()
+def handle_request(clientSocket: socket, addr_: str) -> None:
+    message = clientSocket.recv(1024)
 
-    returnSocket = socket(AF_INET, SOCK_DGRAM)
-    random_port = randint(PORT + 1, PORT + 6001)
-    while random_port in PORTS_IN_USE:
-        random_port = randint(PORT + 1, PORT + 6001)
+    request = message.decode()
+    logger.info(f"Requisição: '{request}'")
 
-    PORTS_IN_USE.append(random_port)
-    returnSocket.bind((NAME, random_port))
-
-    logger.info(
-        f"Requisição: '{message.decode()}', socket criado na porta: {random_port}"
-    )
-
+    request = request.split()
     if len(request) <= 1:
-        returnSocket.sendto("ERROR Má requisição".encode(), addr_)
+        clientSocket.send("ERROR Má requisição".encode())
         return
 
     if request[0] != "GET":
-        returnSocket.sendto("ERROR Método não permitido".encode(), addr_)
+        clientSocket.send("ERROR Método não permitido".encode())
         return
 
     filename = request[1]
     splitted_filename = filename.split("/")
     if len(splitted_filename) > 1:
-        send_file_part(returnSocket, splitted_filename[0], splitted_filename[1], addr_)
+        send_file_part(clientSocket, splitted_filename[0], splitted_filename[1])
     else:
-        send_full_file(returnSocket, filename, addr_)
+        send_full_file(clientSocket, filename)
 
-    PORTS_IN_USE.remove(random_port)
-    returnSocket.close()
+    clientSocket.close()
 
 
 while True:
-    message, addr = serverSocket.recvfrom(1024)
+    clientSocket, addr = serverSocket.accept()
 
-    thread = Thread(target=handle_request, args=(message, addr), daemon=True)
+    thread = Thread(target=handle_request, args=(clientSocket, addr), daemon=True)
     thread.start()
