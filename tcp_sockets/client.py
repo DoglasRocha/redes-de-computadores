@@ -27,14 +27,13 @@ def receive_file(client_socket: socket) -> None:
         filename = file_data[3]
         checksum = file_data[4]
         client_socket.send(b"OK")
-        buffer = []
-        lost = []
 
         n_digits = len(str(n_packets))
         hash_init = n_digits + 1
         hash_end = hash_init + 16
 
         makedirs("./destination", exist_ok=True)
+        full_checksum = md5()
         with open(path.join("./destination", filename), "wb") as file:
             for i in range(0, int(n_packets)):
                 packet = client_socket.recv(int(buffer_size))
@@ -52,10 +51,14 @@ def receive_file(client_socket: socket) -> None:
                         packet, hash_init, hash_end
                     )
 
+                full_checksum.update(data)
                 file.write(data)
                 client_socket.send(b"OK")
 
-        print("Arquivo transferido com sucesso!")
+        if full_checksum.hexdigest() == checksum:
+            print("Arquivo transferido com sucesso!")
+        else:
+            print("A transferência de arquivo não teve sucesso!!!")
 
 
 def get_file(client_socket: socket) -> None:

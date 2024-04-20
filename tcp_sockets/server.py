@@ -18,27 +18,13 @@ logging.basicConfig(
 )
 
 
-def send_file_part(returnSocket: socket, filename: str, part: str) -> None:
-    if not os.path.exists(os.path.join("./files", filename)):
-        returnSocket.send("ERROR Arquivo não encontrado".encode())
-        return
-
-    n_packets = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
-
-    n_digits = len(str(n_packets))
-    if int(part) > n_packets - 1:
-        returnSocket.send("ERROR Pacote não existe".encode())
-
+def get_file_checksum(filename: str) -> str:
+    checksum = md5()
     with open(os.path.join("./files", filename), "rb") as file:
-        i = 0
-        while data := file.read(1024):
-            if int(part) == i:
-                hash_ = md5(data).digest()
-                returnSocket.send(
-                    b" ".join([f"{i:{'0'}{n_digits}}".encode(), hash_, data])
-                )
-                break
-            i += 1
+        while data := file.read(8192):
+            checksum.update(data)
+
+    return checksum.hexdigest()
 
 
 def send_full_file(returnSocket: socket, filename: str) -> None:
@@ -46,12 +32,12 @@ def send_full_file(returnSocket: socket, filename: str) -> None:
         returnSocket.send("ERROR Arquivo não encontrado".encode())
         return
 
-    n_packets = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
-
-    n_digits = len(str(n_packets))
+    n_packets: int = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
+    n_digits: int = len(str(n_packets))
+    checksum: str = get_file_checksum(filename)
 
     returnSocket.send(
-        f"OK {n_packets} {n_digits+1+16+1+1024} {filename} {'dajbdashbd'}".encode()
+        f"OK {n_packets} {n_digits+1+16+1+1024} {filename} {checksum}".encode()
     )
     confirmation: bytes = returnSocket.recv(1024)
 
