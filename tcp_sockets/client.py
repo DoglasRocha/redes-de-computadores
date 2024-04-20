@@ -1,75 +1,83 @@
 from socket import socket, AF_INET, SOCK_STREAM
 from hashlib import md5
+from os import makedirs, path
 
-# filename = input("Qual o nome do arquivo que você deseja receber? ")
-# # try:
 
-# clientSocket.send(f"GET {filename}".encode())
+def unpack_data_packet(
+    packet: bytes, hash_init: int, hash_end: int
+) -> tuple[bytes, bytes, bytes]:
+    packet_number = packet[0:3]
+    part_checksum = packet[hash_init:hash_end]
+    data = packet[hash_end + 1 :]
 
-# brute_response = clientSocket.recv(1024)
-# message = brute_response
+    return packet_number, part_checksum, data
 
-# n_packets = None
-# if message[0:5] == b"ERROR":
-#     response = message.decode().split(" ")
-#     print("Aconteceu um erro: ", " ".join(response[1:]))
 
-# else:
-#     if message[0:2] == b"OK":
+def receive_file(client_socket: socket) -> None:
+    file_data = client_socket.recv(1024).decode().split(" ")
 
-#         response = message.decode().split(" ")
-#         n_packets = response[1]
-#         buffer_size = response[2]
-#         buffer = []
-#         lost = []
+    n_packets = None
+    if file_data[0] == "ERROR":
+        print("Aconteceu um erro: ", " ".join(file_data[1:]))
+        return
 
-#         brute_response = clientSocket.recv(int(buffer_size))
+    if file_data[0] == "OK":
+        n_packets = file_data[1]
+        buffer_size = file_data[2]
+        filename = file_data[3]
+        checksum = file_data[4]
+        client_socket.send(b"OK")
+        buffer = []
+        lost = []
 
-#         for i in range(0, int(n_packets)):
-#             message = brute_response
-#             if message[0:3] == b"END":
-#                 break
+        n_digits = len(str(n_packets))
+        hash_init = n_digits + 1
+        hash_end = hash_init + 16
 
-#             buffer.append(message)
+        makedirs("./destination", exist_ok=True)
+        with open(path.join("./destination", filename), "wb") as file:
+            for i in range(0, int(n_packets)):
+                packet = client_socket.recv(int(buffer_size))
+                if packet[0:3] == b"END":
+                    break
 
-#             brute_response = clientSocket.recv(int(buffer_size))
+                packet_number, part_checksum, data = unpack_data_packet(
+                    packet, hash_init, hash_end
+                )
 
-#     if n_packets is not None:
-#         file_array = [None for i in range(int(n_packets))]
+                while md5(data).digest() != part_checksum:
+                    client_socket.send(b"NOK")
+                    packet = client_socket.recv(int(buffer_size))
+                    packet_number, part_checksum, data = unpack_data_packet(
+                        packet, hash_init, hash_end
+                    )
 
-#         n_digits = len(str(n_packets))
-#         hash_init = n_digits + 1
-#         hash_end = hash_init + 16
-#         for packet in buffer:
-#             header = packet[0:n_digits]
-#             hash_ = packet[hash_init:hash_end]
-#             data = packet[hash_end + 1 :]
+                file.write(data)
+                client_socket.send(b"OK")
 
-#             if md5(data).digest() == hash_:
-#                 file_array[int(header)] = data
+        print("Arquivo transferido com sucesso!")
 
-#         file = open(filename, "wb")
-#         for index, segment in enumerate(file_array):
-#             if segment is not None:
-#                 file.write(segment)
-#             else:
-#                 data = b"dkjasbda"
-#                 hash_ = b"dasjbadskd"
-#                 while md5(data).digest() != hash_:
-#                     clientSocket.send(f"GET {filename}/{index}".encode())
-#                     message = clientSocket.recv(int(buffer_size))
-#                     hash_ = message[hash_init:hash_end]
-#                     data = message[hash_end + 1 :]
-#                 file.write(data)
-#         file.close()
-#         print("Arquivo transferido com sucesso!")
 
-# clientSocket.close()
+def get_file(client_socket: socket) -> None:
+    client_socket.send(b"ARQUIVO")
+
+    resp_available_files_count: bytes = client_socket.recv(1024)
+
+    client_socket.send(b"OK")
+
+    print("\n")
+    for i in range(int(resp_available_files_count.decode())):
+        print(client_socket.recv(1024).decode())
+
+    file_to_receive: str = input("Qual o número do arquivo que você deseja receber? ")
+    client_socket.send(b" ".join([b"GET", file_to_receive.encode()]))
+
+    receive_file(client_socket)
 
 
 def close_connection(client_socket: socket) -> None:
     client_socket.send(b"SAIR")
-    response = client_socket.recv(1024)
+    response: bytes = client_socket.recv(1024)
     if response == b"FECHADO":
         print("Conexão com servidor fechada.")
         return
@@ -78,7 +86,7 @@ def close_connection(client_socket: socket) -> None:
 
 
 def run_ops(client_socket: socket) -> None:
-    option = input(
+    option: str = input(
         "\n\nO que você deseja fazer?\n"
         + "1) Sair\n"
         + "2) Receber arquivo\n"
@@ -90,6 +98,7 @@ def run_ops(client_socket: socket) -> None:
             close_connection(client_socket)
 
         case "2":
+            get_file(client_socket)
             run_ops(client_socket)
 
         case "3":

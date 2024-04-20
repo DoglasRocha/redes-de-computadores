@@ -4,7 +4,7 @@ from time import sleep
 from threading import Thread
 from hashlib import md5
 from typing import Any
-from math import ceil
+from math import ceil, floor
 import logging
 import os
 
@@ -42,7 +42,7 @@ def send_file_part(returnSocket: socket, filename: str, part: str) -> None:
 
 
 def send_full_file(returnSocket: socket, filename: str) -> None:
-    if not os.path.exists(os.path.join("./files", filename)):
+    if not os.path.isfile(os.path.join("./files", filename)):
         returnSocket.send("ERROR Arquivo não encontrado".encode())
         return
 
@@ -50,16 +50,56 @@ def send_full_file(returnSocket: socket, filename: str) -> None:
 
     n_digits = len(str(n_packets))
 
-    returnSocket.send(f"OK {n_packets} {n_digits+1+16+1+1024}".encode())
+    returnSocket.send(
+        f"OK {n_packets} {n_digits+1+16+1+1024} {filename} {'dajbdashbd'}".encode()
+    )
+    confirmation: bytes = returnSocket.recv(1024)
+
     with open(os.path.join("./files", filename), "rb") as file:
         i = 0
         while data := file.read(1024):
             hash_ = md5(data).digest()
             returnSocket.send(b" ".join([f"{i:{'0'}{n_digits}}".encode(), hash_, data]))
+            while returnSocket.recv(1024) == b"NOK":
+                returnSocket.send(
+                    b" ".join([f"{i:{'0'}{n_digits}}".encode(), hash_, data])
+                )
             i += 1
 
-    sleep(1)
-    returnSocket.send(b"END")
+
+def send_file(clientSocket: socket, addr_: str) -> bool:
+    logger.info(f"Mandando arquivo para {addr_}")
+    available_files: list[str] = os.listdir("./files")
+
+    # sends file names
+    long_string: str = "".join(
+        f"{index}) {name}\n" for index, name in enumerate(available_files)
+    )
+
+    # sends packet count
+    n_packets: int = ceil(len(long_string) / 1024)
+    clientSocket.send(f"{n_packets}".encode())
+
+    # waits confirmation
+    confirmation: bytes = clientSocket.recv(1024)
+    if confirmation != b"OK":
+        return close_connection(clientSocket, addr_)
+
+    for i in range(n_packets):
+        clientSocket.send(long_string[1024 * i : 1024 * (i + 1)].encode())
+
+    # gets desired file from client
+    file_request: bytes = clientSocket.recv(1024)
+
+    n_file = int(file_request.decode().split(" ")[-1])
+    send_full_file(
+        clientSocket,
+        (
+            ""
+            if n_file >= len(available_files) or n_file < 0
+            else available_files[n_file]
+        ),
+    )
 
 
 def close_connection(clientSocket: socket, addr_: str) -> bool:
@@ -86,7 +126,7 @@ def handle_request(clientSocket: socket, addr_: str) -> None:
         operation: str = request[0]
         operation_opts: dict = {
             "SAIR": close_connection,
-            "ARQUIVO": lambda x: x,
+            "ARQUIVO": send_file,
             "CHAT": lambda x: x,
         }
         if operation not in operation_opts.keys():
