@@ -3,6 +3,21 @@ from hashlib import md5
 from os import makedirs, path
 
 
+def chat(client_socket: socket) -> None:
+    client_socket.send(b"CHAT")
+
+    # waits server reponse
+    response: bytes = client_socket.recv(1024)
+
+    # sends message
+    message: str = input("O que você deseja dizer ao servidor?\n\t> ")
+
+    client_socket.send(message[:1024].encode())
+
+    server_response: bytes = client_socket.recv(1024)
+    print(f"O servidor diz:\n\t> {server_response.decode()}")
+
+
 def unpack_data_packet(
     packet: bytes, hash_init: int, hash_end: int
 ) -> tuple[bytes, bytes, bytes]:
@@ -105,6 +120,7 @@ def run_ops(client_socket: socket) -> None:
             run_ops(client_socket)
 
         case "3":
+            chat(client_socket)
             run_ops(client_socket)
 
         case _:

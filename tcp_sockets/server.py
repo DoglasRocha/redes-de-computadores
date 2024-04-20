@@ -18,6 +18,18 @@ logging.basicConfig(
 )
 
 
+def chat(client_socket: socket, addr_: str) -> None:
+    client_socket.send(b"OK")
+
+    print("\n")
+    client_message_bytes: bytes = client_socket.recv(1024)
+    print(f"{addr_} diz:\n\t> {client_message_bytes.decode()}")
+
+    response = input("O que você deseja dizer ao cliente?\n\t> ")
+    client_socket.send(response.encode())
+    print("\n")
+
+
 def get_file_checksum(filename: str) -> str:
     checksum = md5()
     with open(os.path.join("./files", filename), "rb") as file:
@@ -27,11 +39,12 @@ def get_file_checksum(filename: str) -> str:
     return checksum.hexdigest()
 
 
-def send_full_file(returnSocket: socket, filename: str) -> None:
+def send_full_file(returnSocket: socket, filename: str, addr_: str) -> None:
     if not os.path.isfile(os.path.join("./files", filename)):
         returnSocket.send("ERROR Arquivo não encontrado".encode())
         return
 
+    logger.info(f"Mandando arquivo {filename} para {addr_}")
     n_packets: int = ceil(os.path.getsize(os.path.join("./files", filename)) / 1024)
     n_digits: int = len(str(n_packets))
     checksum: str = get_file_checksum(filename)
@@ -85,6 +98,7 @@ def send_file(clientSocket: socket, addr_: str) -> bool:
             if n_file >= len(available_files) or n_file < 0
             else available_files[n_file]
         ),
+        addr_,
     )
 
 
@@ -113,7 +127,7 @@ def handle_request(clientSocket: socket, addr_: str) -> None:
         operation_opts: dict = {
             "SAIR": close_connection,
             "ARQUIVO": send_file,
-            "CHAT": lambda x: x,
+            "CHAT": chat,
         }
         if operation not in operation_opts.keys():
             clientSocket.send("ERROR Método não permitido".encode())
@@ -123,15 +137,6 @@ def handle_request(clientSocket: socket, addr_: str) -> None:
 
         if operation_opts[operation](clientSocket, addr_):
             return
-
-    # filename = request[1]
-    # splitted_filename = filename.split("/")
-    # if len(splitted_filename) > 1:
-    #     send_file_part(clientSocket, splitted_filename[0], splitted_filename[1])
-    # else:
-    #     send_full_file(clientSocket, filename)
-
-    # clientSocket.close()
 
 
 def run_server() -> None:
